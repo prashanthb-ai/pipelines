@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"reflect"
 	"strings"
@@ -450,10 +451,19 @@ func mutatePods(ar v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 
 	raw := ar.Request.Object.Raw
 	pod := corev1.Pod{}
+	log.Printf("Got raw podjosn %s", string(raw))
+	log.Printf("AdmissionRequest.Namespace %s", ar.Request.Namespace)
 	deserializer := codecs.UniversalDeserializer()
 	if _, _, err := deserializer.Decode(raw, nil, &pod); err != nil {
 		klog.Error(err)
 		return toAdmissionResponse(err)
+	}
+
+	if pod.ObjectMeta.Namespace == "" {
+		pod.ObjectMeta.Namespace = ar.Request.Namespace
+		log.Printf("Modified pod NS to: %s.", pod.ObjectMeta.Namespace)
+	} else {
+		log.Printf("Deserialized pod NS: %s.", pod.ObjectMeta.Namespace)
 	}
 	reviewResponse := v1beta1.AdmissionResponse{}
 	reviewResponse.Allowed = true

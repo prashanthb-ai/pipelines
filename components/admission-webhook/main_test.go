@@ -5,8 +5,13 @@ import (
 	"testing"
 
 	settingsapi "github.com/kubeflow/kubeflow/components/admission-webhook/pkg/apis/settings/v1alpha1"
+	"k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"log"
 )
 
 func TestMergeMapBad(t *testing.T) {
@@ -70,6 +75,40 @@ func TestMergeMapGood(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMutatePods(t *testing.T) {
+	pod := corev1.Pod{
+		TypeMeta: metav1.TypeMeta{Kind: "Pod", APIVersion: "corev1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "test",
+			Namespace:   "testns",
+			Annotations: map[string]string{"foo": "bar"},
+		},
+	}
+
+	gv := metav1.GroupVersionResource{
+		Group: "", Version: "v1", Resource: "pods"}
+	var scheme = runtime.NewScheme()
+	var codecs = serializer.NewCodecFactory(scheme)
+	var testCodec = codecs.LegacyCodec(schema.GroupVersion{
+		Group: "", Version: "v1"})
+	podJSON, err := runtime.Encode(testCodec, &pod)
+	if err != nil {
+		log.Printf("Failed to encode pood %v", err)
+	}
+
+	ar := v1beta1.AdmissionReview{
+		Request: &v1beta1.AdmissionRequest{
+			Namespace: "test",
+			Resource:  gv,
+			Object: runtime.RawExtension{
+				Raw:    podJSON,
+				Object: &pod,
+			},
+		},
+	}
+	mutatePods(ar)
 }
 
 func TestApplyPodDefaultsOnPod(t *testing.T) {
